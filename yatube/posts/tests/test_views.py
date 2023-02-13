@@ -21,7 +21,9 @@ class PostPagesTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='auth')
+        cls.author = User.objects.create_user(username='author')
+        cls.authorized = User.objects.create_user(username='JustAuthorized')
+        cls.follower = User.objects.create_user(username='follower')
         cls.small_gif = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
             b'\x01\x00\x80\x00\x00\x00\x00\x00'
@@ -41,14 +43,14 @@ class PostPagesTests(TestCase):
             description='Тестовое описание',
         )
         cls.post = Post.objects.create(
-            author=cls.user,
+            author=cls.author,
             text='Тестовый пост',
             group=cls.group,
             id=1,
             image=cls.uploaded,
         )
         cls.follow = Follow.objects.create(
-            user=cls.user,
+            user=cls.follower,
             author=cls.post.author,
         )
 
@@ -60,6 +62,10 @@ class PostPagesTests(TestCase):
     def setUp(self):
         self.author = Client()
         self.author.force_login(PostPagesTests.post.author)
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.authorized)
+        self.follower = Client()
+        self.follower.force_login(PostPagesTests.follow.user)
 
     def test_pages_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -202,26 +208,40 @@ class PostPagesTests(TestCase):
                             len(response_after_cahce_clear))
 
     def test_page_follow(self):
-        """Проверка работы подписки."""
-        response = self.author.get(reverse(
-                                   'posts:profile_follow',
-                                   kwargs={'username': self.post.author}))
+        """Проверка работы подписки:
+        редирект и создание."""
+        follow_count = Follow.objects.all().count()
+        response = self.authorized_client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.post.author}),)
         self.assertRedirects(
             response, reverse(
                 'posts:profile', kwargs={'username': self.post.author}
             )
         )
+        self.assertEqual(Follow.objects.count(), follow_count + 1)
 
     def test_page_unfollow(self):
-        """Проверка работы отписки."""
-        response = self.author.get(reverse(
-                                   'posts:profile_unfollow',
-                                   kwargs={'username': self.post.author}))
+        """Проверка работы отписки:
+        редирект и удаление."""
+        response_add_follow = self.follower.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.post.author}),)
+        self.assertRedirects(
+            response_add_follow, reverse(
+                'posts:profile', kwargs={'username': self.post.author}
+            )
+        )
+        follow_count = Follow.objects.all().count()
+        response = self.follower.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.post.author}))
         self.assertRedirects(
             response, reverse(
                 'posts:profile', kwargs={'username': self.post.author}
             )
         )
+        self.assertEqual(Follow.objects.count(), follow_count - 1)
 
 
 class PaginatorViewsTest(TestCase):
