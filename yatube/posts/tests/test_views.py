@@ -211,37 +211,72 @@ class PostPagesTests(TestCase):
         """Проверка работы подписки:
         редирект и создание."""
         follow_count = Follow.objects.all().count()
-        response = self.authorized_client.get(
+        form_data = {
+            'user': self.follow.user,
+            'author': self.follow.author,
+        }
+        response = self.authorized_client.post(
             reverse('posts:profile_follow',
-                    kwargs={'username': self.post.author}),)
+                    kwargs={'username': self.post.author}),
+            data=form_data,
+            follow=True
+        )
         self.assertRedirects(
             response, reverse(
                 'posts:profile', kwargs={'username': self.post.author}
             )
         )
         self.assertEqual(Follow.objects.count(), follow_count + 1)
+        self.assertTrue(
+            Follow.objects.filter(
+                user=form_data['user'],
+                author=form_data['author'],
+            ).exists()
+        )
 
     def test_page_unfollow(self):
         """Проверка работы отписки:
         редирект и удаление."""
-        response_add_follow = self.follower.get(
+        form_data = {
+            'user': self.follow.user,
+            'author': self.follow.author,
+        }
+        response_add_follow = self.follower.post(
             reverse('posts:profile_follow',
-                    kwargs={'username': self.post.author}),)
+                    kwargs={'username': self.post.author}),
+            data=form_data,
+            follow=True
+        )
+        self.assertTrue(
+            Follow.objects.filter(
+                user=form_data['user'],
+                author=form_data['author'],
+            ).exists()
+        )
         self.assertRedirects(
             response_add_follow, reverse(
                 'posts:profile', kwargs={'username': self.post.author}
             )
         )
         follow_count = Follow.objects.all().count()
-        response = self.follower.get(
+        response = self.follower.post(
             reverse('posts:profile_unfollow',
-                    kwargs={'username': self.post.author}))
+                    kwargs={'username': self.post.author}),
+            data=form_data,
+            follow=True
+        )
         self.assertRedirects(
             response, reverse(
                 'posts:profile', kwargs={'username': self.post.author}
             )
         )
         self.assertEqual(Follow.objects.count(), follow_count - 1)
+        self.assertFalse(
+            Follow.objects.filter(
+                user=form_data['user'],
+                author=form_data['author'],
+            ).exists()
+        )
 
 
 class PaginatorViewsTest(TestCase):
